@@ -13,3 +13,22 @@
 
 4. Tools
 	* AX: https://ax.dev/docs/why-ax.html
+
+
+## TO DO
+
+1. State-of-the-art review: start to write the first part of the thesis:
+	* Overview of hyperparameter optimization, NAS, meta-learning etc.
+	* Overview of the methods: how they work? Which are the PROs? Which are the CONs?
+	* Available tools
+
+2. Describe the constraints for the optimization:
+	* Latency
+	* Power
+	* Area
+	* Architecture: maximum number of neurons, synapses
+	* Bit-width
+	
+	How can we describe them? How can we formalize them? Should we consider quantization at this level?
+
+3. Keep track of whatever you think can be useful, like tools, papers, websites, books, blogs, whichever thing, here. Keep this readme updated.
