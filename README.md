@@ -10,10 +10,12 @@
 
 3. Bayesan Optimization:
 	* https://research.facebook.com/blog/2021/07/optimizing-model-accuracy-and-latency-using-bayesian-multi-objective-neural-architecture-search/
+	* https://arxiv.org/pdf/2109.10964.pdf								%% Multi-Objective High Dimensional Bayesian Optimization
+	* https://botorch.org/docs/botorch_and_ax#when-not-to-use-ax		%% Design Spaces belongs to the cases in which is not optimal to use Ax, vague
 
 4. Tools
 	* AX: https://ax.dev/docs/why-ax.html
-
+		%% Ax substantially simplifies the usage of BoTorch and does it through 3 different APIs, the one of interest is Dev API, the most customizable
 
 ## TO DO
 
