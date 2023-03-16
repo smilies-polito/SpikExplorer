@@ -5,10 +5,12 @@
 	* https://neptune.ai/blog/hyperparameter-tuning-in-python-complete-guide
 
 2. Network Architecture Search: 
+	* https://dl.acm.org/doi/10.5555/2023011.2023014
 	* https://en.wikipedia.org/wiki/Neural_architecture_search
 	* https://www.automl.org/nas-overview/
 
 3. Bayesan Optimization:
+	* https://arxiv.org/abs/1910.11858 									%% BANANAS
 	* https://research.facebook.com/blog/2021/07/optimizing-model-accuracy-and-latency-using-bayesian-multi-objective-neural-architecture-search/
 	* https://arxiv.org/pdf/2109.10964.pdf								%% Multi-Objective High Dimensional Bayesian Optimization
 	* https://botorch.org/docs/botorch_and_ax#when-not-to-use-ax		%% Design Spaces belongs to the cases in which is not optimal to use Ax, vague
