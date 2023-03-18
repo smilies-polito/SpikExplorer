@@ -5,6 +5,7 @@
 	* https://neptune.ai/blog/hyperparameter-tuning-in-python-complete-guide
 
 2. Network Architecture Search: 
+	* https://www.oreilly.com/content/what-is-neural-architecture-search/
 	* https://dl.acm.org/doi/10.5555/2023011.2023014
 	* https://en.wikipedia.org/wiki/Neural_architecture_search
 	* https://www.automl.org/nas-overview/
