@@ -21,6 +21,10 @@
 	* AX: https://ax.dev/docs/why-ax.html
 		%% Ax substantially simplifies the usage of BoTorch and does it through 3 different APIs, the one of interest is Dev API, the most customizable
 
+5. Estimate energy consumption:
+	* https://arxiv.org/pdf/2210.13107.pdf
+	* https://arxiv.org/pdf/2210.01625.pdf
+	* https://www.frontiersin.org/articles/10.3389/fnins.2020.00662/full
 ## TO DO
 
 1. State-of-the-art review: start to write the first part of the thesis:
