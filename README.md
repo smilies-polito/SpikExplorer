@@ -3,6 +3,7 @@
 1. Hyperparameters Optimization:
 	* https://en.wikipedia.org/wiki/Hyperparameter_optimization
 	* https://neptune.ai/blog/hyperparameter-tuning-in-python-complete-guide
+	* https://www.tomasbeuzen.com/deep-learning-with-pytorch/chapters/chapter6_cnns-pt2.html
 
 2. Network Architecture Search: 
 	* https://www.oreilly.com/content/what-is-neural-architecture-search/
