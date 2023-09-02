@@ -1,0 +1,7 @@
+snntorch
+ax-platform
+torchvision
+torchsummary
+tonic
+torch
+numpy
