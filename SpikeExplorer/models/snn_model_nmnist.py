@@ -98,8 +98,8 @@ def forward_pass(net, data, active_consumption=None, idle_consumption=None):
     snn.utils.reset(net)  # resets hidden states for all LIF neurons in net
 
     for step in range(10):  # data.size(0) = number of time steps
-        logger.info(data.size())
-        logger.info(data[step].size())
+        #logger.info(data.size())
+        #logger.info(data[step].size())
         spk_out, mem_out = net(data[step])
         spk_rec.append(spk_out)
         mem_rec.append(mem_out)
