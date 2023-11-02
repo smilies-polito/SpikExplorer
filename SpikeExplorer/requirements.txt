@@ -5,3 +5,4 @@ torchsummary
 tonic
 torch
 numpy
+pytest

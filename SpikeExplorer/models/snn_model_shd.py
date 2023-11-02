@@ -10,7 +10,7 @@ from ax.utils.common.logger import get_logger
 logger: Logger = get_logger(__name__)
 
 
-class SNN(nn.Module):
+class SNN_SHD(nn.Module):
     input_size: int
     output_size: int
     hidden_list: list
@@ -18,23 +18,30 @@ class SNN(nn.Module):
 
     def __init__(
         self,
+        input_size,
+        output_size,
+        hidden_list: list,
+        kernel_size,
         beta,
         device,
         surrogate_grad_type,
-        active_consumption,
-        idle_consumption,
-        neuron_threshold,
+        stride=None,
+        padding=None,
     ):
         super().__init__()
-        self.input_size = 28*28
-        self.hidden_size = 1000
-        self.output_size = 10
+        self.n_bins=5
+        self.input_size = 700//self.n_bins
+        self.output_size = 20
+        self.hidden_list = hidden_list
+        self.hidden_size = 128
+        self.kernel_size = kernel_size
         self.beta = beta
         self.device = device
         self.surrogate_grad_type = surrogate_grad_type
-        self.active_consumption = active_consumption
-        self.idle_consumption = idle_consumption
-        self.neuron_threshold = neuron_threshold
+        self.active_consumption = 0.1
+        self.idle_consumption = 0.1
+        self.stride = None
+        self.padding = None
 
     def make_snn(self):
         if self.surrogate_grad_type == "atan":
@@ -45,20 +52,25 @@ class SNN(nn.Module):
 
         net = nn.Sequential(
             nn.Linear(
-                self.input_size,
-                self.hidden_size,
+                700,
+                128,
             ),
             snn.Leaky(beta=self.beta, spike_grad=spike_grad, init_hidden=True),
         )
-        net.extend(
-            [
-                nn.Linear(
-                    self.hidden_size,
-                    self.output_size,
-                ),
-                snn.Leaky(beta=self.beta, spike_grad=spike_grad, init_hidden=True),
-            ]
-        )
+        net.extend([
+            nn.Linear(
+                128,
+                128,
+            ),
+            snn.Leaky(beta=self.beta, spike_grad=spike_grad, init_hidden=True),
+        ])
+        net.extend([
+            nn.Linear(
+                128,
+                20,
+            ),
+            snn.Leaky(beta=self.beta, spike_grad=spike_grad, init_hidden=True),
+        ])
         net.to(self.device)
 
         return net
@@ -69,16 +81,20 @@ def forward_pass(net, data, active_consumption=None, idle_consumption=None):
     mem_rec = []
     total_consumption = 0
     snn.utils.reset(net)  # resets hidden states for all LIF neurons in net
-    spk_out, mem_out = net(data)
-    spk_rec.append(spk_out)
-    mem_rec.append(mem_out)
-    if active_consumption and idle_consumption:
-        for spike in spk_out:
-            total_consumption += (
-                spike * active_consumption
-                if spike is 1
-                else spike * idle_consumption
-            )
+
+    for step in range(data.size(0)):  # data.size(0) = number of time steps
+        logger.info(data.size())
+        logger.info(data[step].size())
+        spk_out, mem_out = net(data[step])
+        spk_rec.append(spk_out)
+        mem_rec.append(mem_out)
+        if active_consumption and idle_consumption:
+            for spike in spk_out:
+                total_consumption += (
+                    spike * active_consumption
+                    if spike is 1
+                    else spike * idle_consumption
+                )
 
     if active_consumption and idle_consumption:
         return (
