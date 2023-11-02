@@ -9,14 +9,10 @@ from tonic import DiskCachedDataset
 def load_mnist(batch_size):
     data_path = "./data/mnist"
 
-    transform = transforms.Compose(
-        [
-            transforms.Resize((28, 28)),
-            transforms.Grayscale(),
-            transforms.ToTensor(),
-            transforms.Normalize((0,), (1,)),
-        ]
-    )
+    transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.1307,), (0.3081,))
+    ])
 
     mnist_train = datasets.MNIST(
         data_path, train=True, download=True, transform=transform

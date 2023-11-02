@@ -75,9 +75,9 @@ def forward_pass(net, data, active_consumption=None, idle_consumption=None):
     if active_consumption and idle_consumption:
         for spike in spk_out:
             total_consumption += (
-                spike * active_consumption
-                if spike is 1
-                else spike * idle_consumption
+                active_consumption
+                if spike == 1
+                else idle_consumption
             )
 
     if active_consumption and idle_consumption:
