@@ -6,9 +6,9 @@ from logging import Logger
 from ax.service.ax_client import AxClient
 from ax.service.utils.instantiation import ObjectiveProperties
 from ax.utils.common.logger import get_logger
-from ax.plot.pareto_utils import compute_posterior_pareto_frontier
 from torch import nn, optim
 from utils import load_nmnist, load_shd, load_mnist
+from models import model_generator
 
 logger: Logger = get_logger(__name__)
 
@@ -47,10 +47,13 @@ class AxManager:
         elif self.dataset == "gesture":
             pass
         else:
+            self.input_size = 784
+            self.hidden_layers = config.get("hidden_layers")
+            self.output_size = 10
             self.train_loader, self.test_loader = load_mnist(self.batch_size)
 
-        self.idle_consumption = config.get("neuron_consumption").get("idle")
-        self.active_consumption = config.get("neuron_consumption").get("active")
+        self.idle_consumption = config.get("neuron_consumption").get("idle")  # TODO: TO BE DEFINED FINAL METHOD
+        self.active_consumption = config.get("neuron_consumption").get("active")  # TODO: TO BE DEFINED FINAL METHOD
 
     def load_parameters_to_search(self, parameters_to_search=None):
         if parameters_to_search:
@@ -66,7 +69,7 @@ class AxManager:
                     "value_type": "float",
                 },
                 {
-                    "name": "beta1",
+                    "name": "betas",
                     "type": "range",
                     "bounds": [0.5, 0.999],
                     "log_scale": False,
@@ -101,73 +104,29 @@ class AxManager:
 
         logger.info(ax_client.experiment.optimization_config)
 
-        """objectives = ax_client.experiment.optimization_config.objective.objectives
-        frontier = compute_posterior_pareto_frontier(
-            experiment=ax_client.experiment,
-            data=ax_client.experiment.fetch_data(),
-            primary_objective=objectives[0].metric,
-            secondary_objective=objectives[1].metric,
-            absolute_metrics=["accuracy", "time"],
-            num_points=10,
-        )
-        logger.info(f"Frontier point found", extra={"frontier": frontier})"""
-
     def train_evaluate(self, parameterization):
         if self.dataset == "nmnist":
-            from models.snn_model_nmnist import SNN_NMNIST, forward_pass
-
-            model = SNN_NMNIST(
-                beta=parameterization.get("exp_decay", 0.95),
-                device=self.device,
-                surrogate_grad_type=parameterization.get("surrogate", "atan"),
-                neuron_threshold=parameterization.get("neuron_threshold", None),
-                active_consumption=self.active_consumption,
-                idle_consumption=self.idle_consumption,
-            ).make_snn()
+            pass
         elif self.dataset == "shd":
-            from models.snn_model_shd import SNN_SHD, forward_pass
-
-            model = SNN_SHD(
-                beta=parameterization.get("exp_decay", 0.95),
-                device=self.device,
-                surrogate_grad_type=parameterization.get("surrogate", "atan"),
-                neuron_threshold=parameterization.get("neuron_threshold", None),
-                active_consumption=self.active_consumption,
-                idle_consumption=self.idle_consumption,
-            ).make_snn()
+            pass
         elif self.dataset == "gesture":
-            from models.snn_model_gesture import SNN_GESTURE, forward_pass
             pass
         else:
-            from models.snn_model import SNN, forward_pass
-
-            model = SNN(
+            model = model_generator.Net(
+                input_size=self.input_size,
+                hidden_layers=self.hidden_layers,
+                output_size=self.output_size,
                 beta=parameterization.get("exp_decay", 0.95),
-                device=self.device,
-                surrogate_grad_type=parameterization.get("surrogate", "atan"),
-                neuron_threshold=parameterization.get("neuron_threshold", None),
-                active_consumption=self.active_consumption,
-                idle_consumption=self.idle_consumption,
-            ).make_snn()
+                time_steps=parameterization.get("time_steps", 25)
+            )
 
         loss = nn.CrossEntropyLoss()
+
         optimizer = optim.Adam(
             model.parameters(),
             lr=parameterization.get("lr", 0.001),
-            betas=(parameterization.get("beta1", 0.9), 0.999),
+            betas=(parameterization.get("betas", 0.9), 0.999),
         )
-
-        """
-        def print_batch_accuracy(data, targets, train=False):
-            output, _ = model(data.view(self.batch_size, -1))
-            _, idx = output.sum(dim=0).max(1)
-            acc = np.mean((targets == idx).detach().cpu().numpy())
-
-            if train:
-                print(f"Train set accuracy for a single minibatch: {acc * 100:.2f}%")
-            else:
-                print(f"Test set accuracy for a single minibatch: {acc * 100:.2f}%")
-        """
 
         loss_hist = []
         test_loss_hist = []
@@ -177,47 +136,20 @@ class AxManager:
         cuda_eval_time = []
         consumptions = []
 
-        """
-        # Correct way to measure elapsed time during evaluations
-    
-        # INIT LOGGERS
-        starter, ender = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
-        repetitions = 300
-        timings=np.zeros((repetitions,1))
-        #GPU-WARM-UP
-        for _ in range(10):
-            _ = model(dummy_input)
-        # MEASURE PERFORMANCE
-        with torch.no_grad():
-            for rep in range(repetitions):
-                starter.record()
-                _ = model(dummy_input)
-                ender.record()
-                # WAIT FOR GPU SYNC
-                torch.cuda.synchronize()
-                curr_time = starter.elapsed_time(ender)
-                timings[rep] = curr_time
-        mean_syn = np.sum(timings) / repetitions
-        std_syn = np.std(timings)
-        print(mean_syn)
-        """
-
         # Outer training loop
         for epoch in range(self.num_epochs):
-            iter_counter = 0
+            train_batch = iter(self.train_loader)
 
-            for i, (data, targets) in enumerate(self.train_loader):
+            for data, targets in train_batch:
                 data = data.to(self.device)
                 targets = targets.to(self.device)
+
                 model.train()
-                spk_rec, mem_rec, total_consumption = forward_pass(
-                    model, data, self.active_consumption, self.idle_consumption
-                )
+                spk_rec, mem_rec = model(data.flatten(1))
 
                 # initialize the loss & sum over time
                 loss_val = torch.zeros((1), dtype=self.dtype, device=self.device)
-                for step in range(self.num_steps):
-                    loss_val += loss(mem_rec[step], targets)
+                loss_val += loss(spk_rec.sum(0), targets)
 
                 # Gradient calculation + weight update
                 optimizer.zero_grad()
@@ -226,6 +158,13 @@ class AxManager:
 
                 # Store loss history for future plotting
                 loss_hist.append(loss_val.item())
+
+                if counter % 10 == 0:
+                    print(f"Iteration: {counter} \t Train Loss: {loss_val.item()}")
+                counter += 1
+
+                if counter == 100:
+                    break
 
             # Test set
             with torch.no_grad():
@@ -240,15 +179,13 @@ class AxManager:
                     ), torch.cuda.Event(enable_timing=True)
                     # GPU-WARM-UP
                     for _ in range(5):
-                        _ = forward_pass(model, test_data, self.active_consumption, self.idle_consumption)
+                        _ = model(test_data.flatten(1))
                     starter.record()
 
                 else:
                     starter = time.time()
                 # Test set forward pass
-                test_spk, test_mem, total_consumption = forward_pass(
-                    model, test_data, self.active_consumption, self.idle_consumption
-                )
+                test_spk, test_mem = model(test_data.flatten(1))
                 if torch.cuda.is_available():
                     ender.record()
                     # WAIT FOR GPU SYNC
@@ -272,11 +209,6 @@ class AxManager:
                 for step in range(self.num_steps):
                     test_loss += loss(test_mem[step], test_targets)
                 test_loss_hist.append(test_loss.item())
-
-                consumptions.append(total_consumption)
-
-                counter += 1
-                iter_counter += 1
 
         if torch.cuda.is_available():
             avg_time = np.mean(cuda_eval_time)

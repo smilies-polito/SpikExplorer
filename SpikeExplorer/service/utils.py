@@ -10,9 +10,10 @@ def load_mnist(batch_size):
     data_path = "./data/mnist"
 
     transform = transforms.Compose([
+        transforms.Resize((28, 28)),
+        transforms.Grayscale(),
         transforms.ToTensor(),
-        transforms.Normalize((0.1307,), (0.3081,))
-    ])
+        transforms.Normalize((0,), (1,))])
 
     mnist_train = datasets.MNIST(
         data_path, train=True, download=True, transform=transform

@@ -1,34 +1,32 @@
 {
-    "dataset":"nmnist",
+    "input_size": 784,
+    "hidden_layers": [1000, 100],
+    "output_size": 10,
+    "dataset":"mnist",
     "name": "experiment_name",
     "overwrite_existing_experiment": true,
     "is_test": false,
-    "num_trials": 10,
+    "num_trials": 20,
     "batch_size": 256,
-    "num_epochs": 2,
-    "num_steps": 5,
+    "num_epochs": 5,
+    "num_steps": 25,
     "objectives": [
         {
             "obj_name": "accuracy",
             "minimize": false,
-            "threshold": null
+            "threshold": 0.98
         },
         {
             "obj_name": "time",
             "minimize": true,
-            "threshold": null
-        },
-        {
-            "obj_name": "consumption",
-            "minimize": true,
-            "threshold": null
+            "threshold": 0.3
         }
     ],
     "parameters_to_search": [
         {
             "name": "lr",
             "type": "range",
-            "bounds": [1e-6, 0.4],
+            "bounds": [1e-4, 0.4],
             "log_scale": true,
             "value_type": "float"
         },
