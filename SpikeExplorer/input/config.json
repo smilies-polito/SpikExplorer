@@ -1,6 +1,6 @@
 {
     "input_size": 784,
-    "hidden_layers": [1000, 100],
+    "hidden_layers": [100],
     "output_size": 10,
     "dataset":"mnist",
     "name": "experiment_name",
@@ -8,7 +8,7 @@
     "is_test": false,
     "num_trials": 20,
     "batch_size": 256,
-    "num_epochs": 5,
+    "num_epochs": 2,
     "num_steps": 25,
     "objectives": [
         {

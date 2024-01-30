@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 import snntorch as snn
 from torch import nn
@@ -39,6 +40,8 @@ class Net(nn.Module):
         self.time_steps = time_steps
         self.neuron_type = neuron_type
         self.network_type = network_type
+        self.active_consumption = 1
+        self.passive_consumption = 0.2
         self.input_size = input_size
         self.output_size = output_size
         self.hidden_layers_num = len(hidden_layers)
@@ -84,14 +87,25 @@ class Net(nn.Module):
             spk_rec = []
             mem_rec = []
 
+            spk_dict = {}
+            mem_dict = {}
+
             for step in range(self.time_steps):
                 spk = x
                 for num in range(self.hidden_layers_num + 1):
                     cur = self.__getattr__(f"fc{num + 1}")(spk)
                     spk, mem = self._spiking_forward_pass(num, cur, mem_list, spk_list)
+                    if not spk_dict.get(f"{self.neuron_type}{num + 1}"):
+                        spk_dict[f"{self.neuron_type}{num + 1}"] = []
+                    if not mem_dict.get(f"{self.neuron_type}{num + 1}"):
+                        mem_dict[f"{self.neuron_type}{num + 1}"] = []
+                    spk_dict[f"{self.neuron_type}{num + 1}"].append(spk)
+                    mem_dict[f"{self.neuron_type}{num + 1}"].append(mem)
                 spk_rec.append(spk)
                 mem_rec.append(mem)
 
+            total_consumption = self._calculate_total_consumption(spk_dict, mem_dict)
+            print(total_consumption)
             return torch.stack(spk_rec, dim=0), torch.stack(mem_rec, dim=0)
 
     def _define_spiking_layer(self, beta, hidden_layers, counter, is_first, alpha=0.9, kernel_size=3):
@@ -202,3 +216,16 @@ class Net(nn.Module):
         elif self.neuron_type == "SConv2dLSTM":
             pass
         return spk, mem
+
+    def _calculate_total_consumption(self, spk_dict: dict, mem_dict: dict):
+        total_consumption = 0
+        #print(mem_dict.keys())
+        for layer in mem_dict.keys():
+            layer_spk_tensor = torch.stack(spk_dict[layer], dim=0)     # time_steps x batch_size x num_neurons
+            layer_mem_tensor = torch.stack(mem_dict[layer], dim=0)     # same dimensions as above
+
+            delta_mem = layer_mem_tensor[1:-1]-layer_mem_tensor[0:-2]
+
+            total_consumption += torch.sum(torch.where((delta_mem > 0), 0.3, 0.1))
+        #print(total_consumption)
+        return total_consumption

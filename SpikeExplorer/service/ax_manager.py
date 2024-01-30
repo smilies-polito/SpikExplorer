@@ -145,7 +145,7 @@ class AxManager:
                 targets = targets.to(self.device)
 
                 model.train()
-                spk_rec, mem_rec = model(data.flatten(1))
+                spk_rec, mem_rec = model(data.view(self.batch_size, -1))
 
                 # initialize the loss & sum over time
                 loss_val = torch.zeros((1), dtype=self.dtype, device=self.device)
