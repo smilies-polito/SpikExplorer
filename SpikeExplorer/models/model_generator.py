@@ -44,27 +44,28 @@ class Net(nn.Module):
         self.passive_consumption = 0.2
         self.input_size = input_size
         self.output_size = output_size
-        self.hidden_layers_num = len(hidden_layers)
-        hidden_layers.append(output_size)
+        self.hidden_plus_out_layers_num = len(hidden_layers)
+        self.hidden_plus_out_layers = hidden_layers.copy()
+        self.hidden_plus_out_layers.append(output_size)
 
         if network_type == "conv":
             pass
         else:  # default case to ff
-            self.__setattr__("fc1", nn.Linear(input_size, hidden_layers[0]))
+            self.__setattr__("fc1", nn.Linear(input_size, self.hidden_plus_out_layers[0]))
             self._define_spiking_layer(
                 beta=self.beta,
-                hidden_layers=hidden_layers,
+                hidden_layers=self.hidden_plus_out_layers,
                 counter=0,
                 is_first=True,
                 alpha=alpha,
                 kernel_size=kernel_size
             )
-            for counter in range(len(hidden_layers)):
-                if counter != (len(hidden_layers) - 1):
-                    self.__setattr__(f"fc{counter + 2}", nn.Linear(hidden_layers[counter], hidden_layers[counter + 1]))
+            for counter in range(len(self.hidden_plus_out_layers)):
+                if counter != (len(self.hidden_plus_out_layers) - 1):
+                    self.__setattr__(f"fc{counter + 2}", nn.Linear(self.hidden_plus_out_layers[counter], self.hidden_plus_out_layers[counter + 1]))
                     self._define_spiking_layer(
                         beta=self.beta,
-                        hidden_layers=hidden_layers,
+                        hidden_layers=self.hidden_plus_out_layers,
                         counter=counter,
                         is_first=False,
                         alpha=alpha,
@@ -92,7 +93,7 @@ class Net(nn.Module):
 
             for step in range(self.time_steps):
                 spk = x
-                for num in range(self.hidden_layers_num + 1):
+                for num in range(self.hidden_plus_out_layers_num + 1):
                     cur = self.__getattr__(f"fc{num + 1}")(spk)
                     spk, mem = self._spiking_forward_pass(num, cur, mem_list, spk_list)
                     if not spk_dict.get(f"{self.neuron_type}{num + 1}"):
@@ -105,7 +106,7 @@ class Net(nn.Module):
                 mem_rec.append(mem)
 
             total_consumption = self._calculate_total_consumption(spk_dict, mem_dict)
-            print(total_consumption)
+            #print(total_consumption)
             return torch.stack(spk_rec, dim=0), torch.stack(mem_rec, dim=0)
 
     def _define_spiking_layer(self, beta, hidden_layers, counter, is_first, alpha=0.9, kernel_size=3):
@@ -163,23 +164,23 @@ class Net(nn.Module):
         spk_list = []
         if self.neuron_type == "lif":
             mem_list.append(self.__getattr__(f"{self.neuron_type}1").init_leaky())
-            for num in range(self.hidden_layers_num):
+            for num in range(self.hidden_plus_out_layers_num):
                 mem_list.append(self.__getattr__(f"{self.neuron_type}{num + 1}").init_leaky())
         elif self.neuron_type == "rlif":
             spk_to_append, mem_to_append = self.__getattr__(f"{self.neuron_type}1").init_rleaky()
             spk_list.append(spk_to_append)
             mem_list.append(mem_to_append)
-            for num in range(self.hidden_layers_num):
+            for num in range(self.hidden_plus_out_layers_num):
                 spk_to_append, mem_to_append = self.__getattr__(f"{self.neuron_type}{num + 1}").init_rleaky()
                 spk_list.append(spk_to_append)
                 mem_list.append(mem_to_append)
         elif self.neuron_type == "lap":
             mem_list.append(self.__getattr__(f"{self.neuron_type}1").init_lapicque())
-            for num in range(self.hidden_layers_num):
+            for num in range(self.hidden_plus_out_layers_num):
                 mem_list.append(self.__getattr__(f"{self.neuron_type}{num + 1}").init_lapicque())
         elif self.neuron_type == "alp":
             mem_list.append(self.__getattr__(f"{self.neuron_type}1").init_alpha())
-            for num in range(self.hidden_layers_num):
+            for num in range(self.hidden_plus_out_layers_num):
                 syn_exc, syn_inh, mem = self.__getattr__(f"{self.neuron_type}{num + 1}").init_alpha()
                 mem_list.append(mem)
         elif self.neuron_type == "syn":
@@ -219,13 +220,9 @@ class Net(nn.Module):
 
     def _calculate_total_consumption(self, spk_dict: dict, mem_dict: dict):
         total_consumption = 0
-        #print(mem_dict.keys())
         for layer in mem_dict.keys():
-            layer_spk_tensor = torch.stack(spk_dict[layer], dim=0)     # time_steps x batch_size x num_neurons
+            # layer_spk_tensor = torch.stack(spk_dict[layer], dim=0)     # time_steps x batch_size x num_neurons
             layer_mem_tensor = torch.stack(mem_dict[layer], dim=0)     # same dimensions as above
-
             delta_mem = layer_mem_tensor[1:-1]-layer_mem_tensor[0:-2]
-
             total_consumption += torch.sum(torch.where((delta_mem > 0), 0.3, 0.1))
-        #print(total_consumption)
         return total_consumption
