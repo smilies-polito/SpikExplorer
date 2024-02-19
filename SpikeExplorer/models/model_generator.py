@@ -34,7 +34,7 @@ class Net(nn.Module):
     """
 
     def __init__(self, input_size, hidden_layers: list, output_size, beta, time_steps, neuron_type="lif",
-                 network_type=None, alpha=0.99, kernel_size=None):
+                 network_type=None, alpha=0.99, kernel_size=None, dataset="mnist"):
         super().__init__()
         self.beta = beta
         self.time_steps = time_steps
@@ -47,11 +47,15 @@ class Net(nn.Module):
         self.hidden_plus_out_layers_num = len(hidden_layers)
         self.hidden_plus_out_layers = hidden_layers.copy()
         self.hidden_plus_out_layers.append(output_size)
+        self.device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+        self.dataset = dataset
 
         if network_type == "conv":
             pass
         else:  # default case to ff
-            self.__setattr__("fc1", nn.Linear(input_size, self.hidden_plus_out_layers[0]))
+            if self.dataset == "dvs":
+                self.input_size = 16384
+            self.__setattr__("fc1", nn.Linear(self.input_size, self.hidden_plus_out_layers[0]))
             self._define_spiking_layer(
                 beta=self.beta,
                 hidden_layers=self.hidden_plus_out_layers,
@@ -93,8 +97,20 @@ class Net(nn.Module):
 
             for step in range(self.time_steps):
                 spk = x
+                spk = spk.float()
                 for num in range(self.hidden_plus_out_layers_num + 1):
-                    cur = self.__getattr__(f"fc{num + 1}")(spk)
+                    if self.dataset == "shd":
+                        if num == 0:
+                            cur = self.__getattr__(f"fc{num + 1}")(spk[:, step, :])
+                        else:
+                            cur = self.__getattr__(f"fc{num + 1}")(spk)
+                    elif self.dataset == "dvs":
+                        if num == 0:
+                            cur = self.__getattr__(f"fc{num + 1}")(spk[step, :, :])
+                        else:
+                            cur = self.__getattr__(f"fc{num + 1}")(spk)
+                    else:
+                        cur = self.__getattr__(f"fc{num + 1}")(spk)
                     spk, mem = self._spiking_forward_pass(num, cur, mem_list, spk_list)
                     if not spk_dict.get(f"{self.neuron_type}{num + 1}"):
                         spk_dict[f"{self.neuron_type}{num + 1}"] = []

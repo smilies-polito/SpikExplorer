@@ -7,7 +7,7 @@ from ax.service.ax_client import AxClient
 from ax.service.utils.instantiation import ObjectiveProperties
 from ax.utils.common.logger import get_logger
 from torch import nn, optim
-from utils import load_nmnist, load_shd, load_mnist
+from utils import load_nmnist, load_shd, load_mnist, load_dvs
 from models import model_generator
 
 logger: Logger = get_logger(__name__)
@@ -20,7 +20,7 @@ class AxManager:
         self.experiment_name = config.get("name")
 
         self.dtype = torch.float
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
         self.overwrite_existing_experiment = config.get("overwrite_existing_experiment")
         self.is_test = config.get("is_test")
@@ -43,9 +43,13 @@ class AxManager:
         if self.dataset == "nmnist":
             self.train_loader, self.test_loader = load_nmnist(self.batch_size)
         elif self.dataset == "shd":
-            self.train_loader, self.test_loader = load_shd(self.batch_size)
-        elif self.dataset == "gesture":
-            pass
+            self.hidden_layers = config.get("hidden_layers")
+            self.output_size = 20
+            self.train_loader, self.test_loader, self.input_size = load_shd(self.batch_size)
+        elif self.dataset == "dvs":
+            self.hidden_layers = config.get("hidden_layers")
+            self.output_size = 11
+            self.train_loader, self.test_loader, self.input_size = load_dvs(self.batch_size)
         else:
             self.input_size = 784
             self.hidden_layers = config.get("hidden_layers")
@@ -108,19 +112,38 @@ class AxManager:
         if self.dataset == "nmnist":
             pass
         elif self.dataset == "shd":
-            pass
-        elif self.dataset == "gesture":
-            pass
+            model = model_generator.Net(
+                input_size=self.input_size,
+                hidden_layers=self.hidden_layers,
+                output_size=self.output_size,
+                beta=parameterization.get("exp_decay", 0.95),
+                time_steps=parameterization.get("time_steps", self.num_steps),
+                dataset=self.dataset
+            )
+            loss = nn.NLLLoss()
+            log_softmax_fn = nn.LogSoftmax(dim=1)
+        elif self.dataset == "dvs":
+            model = model_generator.Net(
+                input_size=self.input_size,
+                hidden_layers=self.hidden_layers,
+                output_size=self.output_size,
+                beta=parameterization.get("exp_decay", 0.95),
+                time_steps=parameterization.get("time_steps", self.num_steps),
+                dataset=self.dataset
+            )
+            loss = nn.NLLLoss()
+            log_softmax_fn = nn.LogSoftmax(dim=1)
         else:
             model = model_generator.Net(
                 input_size=self.input_size,
                 hidden_layers=self.hidden_layers,
                 output_size=self.output_size,
                 beta=parameterization.get("exp_decay", 0.95),
-                time_steps=parameterization.get("time_steps", 25)
+                time_steps=parameterization.get("time_steps", self.num_steps)
             )
+            loss = nn.CrossEntropyLoss()
 
-        loss = nn.CrossEntropyLoss()
+        print(model)
 
         optimizer = optim.Adam(
             model.parameters(),
@@ -145,11 +168,28 @@ class AxManager:
                 targets = targets.to(self.device)
 
                 model.train()
-                spk_rec, mem_rec = model(data.view(self.batch_size, -1))
+                if self.dataset == "shd":
+                    spk_rec, mem_rec = model(data[:, :, 0, :])
+                    m, _ = torch.max(mem_rec, 0)
+                    log_p_y = log_softmax_fn(m)
+                    loss_val = loss(log_p_y, targets)
+                elif self.dataset == "dvs":
+                    spk_rec, mem_rec = model(
+                        data[:, :, 0, :, :].reshape(
+                            parameterization.get("time_steps", self.num_steps),
+                            self.batch_size,
+                            16384
+                        )
+                    )  # in questo frangente ho (num_step, num_batch, c, h, w) io voglio (num_step, num_batch, 0 fissato e h*W reshape)
+                    m, _ = torch.max(mem_rec, 0)
+                    log_p_y = log_softmax_fn(m)
+                    loss_val = loss(log_p_y, targets)
+                else:
+                    spk_rec, mem_rec = model(data.view(self.batch_size, -1))
 
-                # initialize the loss & sum over time
-                loss_val = torch.zeros((1), dtype=self.dtype, device=self.device)
-                loss_val += loss(spk_rec.sum(0), targets)
+                    # initialize the loss & sum over time
+                    loss_val = torch.zeros((1), dtype=self.dtype, device=self.device)
+                    loss_val += loss(spk_rec.sum(0), targets)
 
                 # Gradient calculation + weight update
                 optimizer.zero_grad()
@@ -159,7 +199,7 @@ class AxManager:
                 # Store loss history for future plotting
                 loss_hist.append(loss_val.item())
 
-                if counter % 10 == 0:
+                if counter % 50 == 0:
                     print(f"Iteration: {counter} \t Train Loss: {loss_val.item()}")
                 counter += 1
 
@@ -185,7 +225,18 @@ class AxManager:
                 else:
                     starter = time.time()
                 # Test set forward pass
-                test_spk, test_mem = model(test_data.flatten(1))
+                if self.dataset == "shd":
+                    test_spk, test_mem = model(test_data[:, :, 0, :])
+                elif self.dataset == "dvs":
+                    test_spk, test_mem = model(
+                        test_data[:, :, 0, :, :].reshape(
+                            parameterization.get("time_steps", self.num_steps),
+                            self.batch_size,
+                            16384
+                        )
+                    )
+                else:
+                    test_spk, test_mem = model(test_data.view(self.batch_size, -1))
                 if torch.cuda.is_available():
                     ender.record()
                     # WAIT FOR GPU SYNC
