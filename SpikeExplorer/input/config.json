@@ -1,14 +1,12 @@
 {
-    "input_size": 784,
     "hidden_layers": [100],
-    "output_size": 10,
     "dataset":"mnist",
-    "name": "experiment_name",
+    "name": "fully_params_on_mnist",
     "overwrite_existing_experiment": true,
     "is_test": false,
     "num_trials": 20,
     "batch_size": 256,
-    "num_epochs": 2,
+    "num_epochs": 10,
     "num_steps": 25,
     "objectives": [
         {
@@ -19,21 +17,40 @@
         {
             "obj_name": "time",
             "minimize": true,
-            "threshold": 0.3
+            "threshold": 0.09
         }
     ],
     "parameters_to_search": [
         {
             "name": "lr",
             "type": "range",
-            "bounds": [1e-4, 0.4],
+            "bounds": [1e-4, 1e-2],
             "log_scale": true,
             "value_type": "float"
         },
         {
             "name": "beta1",
             "type": "range",
-            "bounds": [0.5, 0.999],
+            "bounds": [0.95, 0.999],
+            "log_scale": false,
+            "value_type": "float"
+        },
+        {
+            "name": "neuron_type",
+            "type": "choice",
+            "value_type": "str",
+            "values": ["lif","rlif","syn","rsyn"]
+        },
+        {
+            "name": "num_steps",
+            "type": "choice",
+            "value_type": "int",
+            "values": [25,50,100]
+        },
+        {
+            "name": "exp_decay",
+            "type": "range",
+            "bounds": [0.6, 0.95],
             "log_scale": false,
             "value_type": "float"
         }

@@ -1,3 +1,4 @@
+import os
 import time
 
 import numpy as np
@@ -18,7 +19,7 @@ torch.manual_seed(104)
 class AxManager:
     def __init__(self, config: dict):
         self.experiment_name = config.get("name")
-
+        self.results_path = config.get("results_path", "./results")
         self.dtype = torch.float
         self.device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
@@ -91,6 +92,13 @@ class AxManager:
             self.objectives_dict = {"accuracy": ObjectiveProperties(minimize=False)}
 
     def run_experiment(self):
+        if not os.path.exists(self.results_path):
+            os.makedirs(self.results_path)
+
+        #   checkpoint_path = "./checkpoint"
+        #   if not os.path.exists(checkpoint_path):
+        #       os.makedirs(checkpoint_path)
+
         ax_client = AxClient()
         ax_client.create_experiment(
             name=self.experiment_name,
@@ -100,36 +108,66 @@ class AxManager:
             is_test=self.is_test,
         )
 
+        #   TODO: future implementation
+        #   if os.path.exists(f"{checkpoint_path}/checkpoint.json"):
+        #       ax_client.load_from_json_file(f"{checkpoint_path}/checkpoint.json")
+
         for i in range(self.num_trials):
             parameters, trial_index = ax_client.get_next_trial()
             ax_client.complete_trial(
                 trial_index=trial_index, raw_data=self.train_evaluate(parameters)
             )
 
+            #   ax_client.save_to_json_file(f"{checkpoint_path}/checkpoint.json")
+            ax_client.save_to_json_file(f"{self.results_path}/{self.experiment_name}_after_trial_{i}.json")
+
+        ax_client.save_to_json_file(f"{self.results_path}/{self.experiment_name}_completed.json")
+
         logger.info(ax_client.experiment.optimization_config)
 
     def train_evaluate(self, parameterization):
         if self.dataset == "nmnist":
-            pass
+            model = None
         elif self.dataset == "shd":
+            if parameterization.get("time_steps"):
+                self.train_loader, self.test_loader, self.input_size = load_shd(
+                    self.batch_size, parameterization.get("time_steps")
+                )
             model = model_generator.Net(
                 input_size=self.input_size,
                 hidden_layers=self.hidden_layers,
                 output_size=self.output_size,
+                #
+                #    beta=parameterization.get("exp_decay", 0.95) if parameterization.get("learnable_exp_decay",
+                #                                                                     False) else 0.95,
+                #    {
+                #        "name": "learnable_exp_decay",
+                #        "type": "choice",
+                #        "value_type": "bool",
+                #        "values": [true, false]
+                #    }
                 beta=parameterization.get("exp_decay", 0.95),
+                learnable_exp_decay=parameterization.get("learnable_exp_decay", False),
                 time_steps=parameterization.get("time_steps", self.num_steps),
-                dataset=self.dataset
+                dataset=self.dataset,
+                neuron_type=parameterization.get("neuron_type", "lif"),
             )
             loss = nn.NLLLoss()
             log_softmax_fn = nn.LogSoftmax(dim=1)
         elif self.dataset == "dvs":
+            if parameterization.get("time_steps"):
+                self.train_loader, self.test_loader, self.input_size = load_dvs(
+                    self.batch_size, parameterization.get("time_steps")
+                )
             model = model_generator.Net(
                 input_size=self.input_size,
                 hidden_layers=self.hidden_layers,
                 output_size=self.output_size,
                 beta=parameterization.get("exp_decay", 0.95),
+                learnable_exp_decay=parameterization.get("learnable_exp_decay", False),
                 time_steps=parameterization.get("time_steps", self.num_steps),
-                dataset=self.dataset
+                dataset=self.dataset,
+                neuron_type=parameterization.get("neuron_type", "lif"),
             )
             loss = nn.NLLLoss()
             log_softmax_fn = nn.LogSoftmax(dim=1)
@@ -139,7 +177,9 @@ class AxManager:
                 hidden_layers=self.hidden_layers,
                 output_size=self.output_size,
                 beta=parameterization.get("exp_decay", 0.95),
-                time_steps=parameterization.get("time_steps", self.num_steps)
+                learnable_exp_decay=parameterization.get("learnable_exp_decay", False),
+                time_steps=parameterization.get("time_steps", self.num_steps),
+                neuron_type=parameterization.get("neuron_type", "lif"),
             )
             loss = nn.CrossEntropyLoss()
 
@@ -180,7 +220,7 @@ class AxManager:
                             self.batch_size,
                             16384
                         )
-                    )  # in questo frangente ho (num_step, num_batch, c, h, w) io voglio (num_step, num_batch, 0 fissato e h*W reshape)
+                    )
                     m, _ = torch.max(mem_rec, 0)
                     log_p_y = log_softmax_fn(m)
                     loss_val = loss(log_p_y, targets)
@@ -217,9 +257,6 @@ class AxManager:
                     starter, ender = torch.cuda.Event(
                         enable_timing=True
                     ), torch.cuda.Event(enable_timing=True)
-                    # GPU-WARM-UP
-                    for _ in range(5):
-                        _ = model(test_data.flatten(1))
                     starter.record()
 
                 else:

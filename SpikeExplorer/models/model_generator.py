@@ -1,4 +1,3 @@
-import numpy as np
 import torch
 import snntorch as snn
 from torch import nn
@@ -33,9 +32,10 @@ class Net(nn.Module):
             defines if the network will be simple Feed-Forward, Convolutional, Recurrent
     """
 
-    def __init__(self, input_size, hidden_layers: list, output_size, beta, time_steps, neuron_type="lif",
-                 network_type=None, alpha=0.99, kernel_size=None, dataset="mnist"):
+    def __init__(self, input_size, hidden_layers: list, output_size, beta, time_steps, neuron_type=None,
+                 network_type=None, alpha=0.99, kernel_size=None, dataset="mnist", learnable_exp_decay=False):
         super().__init__()
+        self.alpha = alpha
         self.beta = beta
         self.time_steps = time_steps
         self.neuron_type = neuron_type
@@ -49,6 +49,7 @@ class Net(nn.Module):
         self.hidden_plus_out_layers.append(output_size)
         self.device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
         self.dataset = dataset
+        self.learnable_exp_decay = learnable_exp_decay
 
         if network_type == "conv":
             pass
@@ -61,24 +62,25 @@ class Net(nn.Module):
                 hidden_layers=self.hidden_plus_out_layers,
                 counter=0,
                 is_first=True,
-                alpha=alpha,
+                alpha=self.alpha,
                 kernel_size=kernel_size
             )
             for counter in range(len(self.hidden_plus_out_layers)):
                 if counter != (len(self.hidden_plus_out_layers) - 1):
-                    self.__setattr__(f"fc{counter + 2}", nn.Linear(self.hidden_plus_out_layers[counter], self.hidden_plus_out_layers[counter + 1]))
+                    self.__setattr__(f"fc{counter + 2}", nn.Linear(
+                        self.hidden_plus_out_layers[counter], self.hidden_plus_out_layers[counter + 1]))
                     self._define_spiking_layer(
                         beta=self.beta,
                         hidden_layers=self.hidden_plus_out_layers,
                         counter=counter,
                         is_first=False,
-                        alpha=alpha,
+                        alpha=self.alpha,
                         kernel_size=kernel_size
                     )
 
     def forward(self, x):
         if self.network_type == "conv":
-            mem_list, spk_list = self._init_spiking_layers()
+            mem_list, spk_list, _ = self._init_spiking_layers()
 
             # Record the final layer
             spk_rec = []
@@ -86,7 +88,12 @@ class Net(nn.Module):
 
             return torch.stack(spk_rec, dim=0), torch.stack(mem_rec, dim=0)
         else:
-            mem_list, spk_list = self._init_spiking_layers()
+            mem = None
+            syn_list = []
+            if self.neuron_type in ["syn", "rsyn"]:
+                mem_list, spk_list, syn_list = self._init_spiking_layers()
+            else:
+                mem_list, spk_list, _ = self._init_spiking_layers()
 
             # Record the final layer
             spk_rec = []
@@ -111,7 +118,11 @@ class Net(nn.Module):
                             cur = self.__getattr__(f"fc{num + 1}")(spk)
                     else:
                         cur = self.__getattr__(f"fc{num + 1}")(spk)
-                    spk, mem = self._spiking_forward_pass(num, cur, mem_list, spk_list)
+
+                    if self.neuron_type in ["syn", "rsyn"]:
+                        spk, mem, syn = self._spiking_forward_pass(num, cur, mem_list, spk_list, syn_list)
+                    else:
+                        spk, mem, _ = self._spiking_forward_pass(num, cur, mem_list, spk_list)
                     if not spk_dict.get(f"{self.neuron_type}{num + 1}"):
                         spk_dict[f"{self.neuron_type}{num + 1}"] = []
                     if not mem_dict.get(f"{self.neuron_type}{num + 1}"):
@@ -122,7 +133,7 @@ class Net(nn.Module):
                 mem_rec.append(mem)
 
             total_consumption = self._calculate_total_consumption(spk_dict, mem_dict)
-            #print(total_consumption)
+
             return torch.stack(spk_rec, dim=0), torch.stack(mem_rec, dim=0)
 
     def _define_spiking_layer(self, beta, hidden_layers, counter, is_first, alpha=0.9, kernel_size=3):
@@ -140,8 +151,6 @@ class Net(nn.Module):
             elif self.neuron_type == "rsyn":
                 self.__setattr__(f"{self.neuron_type}1",
                                  snn.RSynaptic(alpha=alpha, beta=beta, linear_features=hidden_layers[0]))
-            elif self.neuron_type == "syn":
-                self.__setattr__(f"{self.neuron_type}1", snn.Synaptic(alpha=alpha, beta=beta))
             elif self.neuron_type == "SLSTM":
                 self.__setattr__(f"{self.neuron_type}1", snn.SLSTM(input_size=hidden_layers[0],
                                                                    hidden_size=hidden_layers[0]))
@@ -164,8 +173,6 @@ class Net(nn.Module):
             elif self.neuron_type == "rsyn":
                 self.__setattr__(f"{self.neuron_type}{counter + 2}",
                                  snn.RSynaptic(alpha=alpha, beta=beta, linear_features=hidden_layers[counter + 1]))
-            elif self.neuron_type == "syn":
-                self.__setattr__(f"{self.neuron_type}{counter + 2}", snn.Synaptic(alpha=alpha, beta=beta))
             elif self.neuron_type == "SLSTM":
                 self.__setattr__(f"{self.neuron_type}{counter + 2}", snn.SLSTM(input_size=hidden_layers[counter + 1],
                                                                                hidden_size=hidden_layers[counter + 1]))
@@ -178,6 +185,7 @@ class Net(nn.Module):
     def _init_spiking_layers(self):
         mem_list = []
         spk_list = []
+        syn_list = []
         if self.neuron_type == "lif":
             mem_list.append(self.__getattr__(f"{self.neuron_type}1").init_leaky())
             for num in range(self.hidden_plus_out_layers_num):
@@ -200,20 +208,32 @@ class Net(nn.Module):
                 syn_exc, syn_inh, mem = self.__getattr__(f"{self.neuron_type}{num + 1}").init_alpha()
                 mem_list.append(mem)
         elif self.neuron_type == "syn":
-            pass
+            syn, mem = self.__getattr__(f"{self.neuron_type}1").init_synaptic()
+            syn_list.append(syn)
+            mem_list.append(mem)
+            for num in range(self.hidden_plus_out_layers_num):
+                syn, mem = self.__getattr__(f"{self.neuron_type}{num + 1}").init_synaptic()
+                syn_list.append(syn)
+                mem_list.append(mem)
         elif self.neuron_type == "rsyn":
-            pass
-        elif self.neuron_type == "syn":
-            pass
+            spk, syn, mem = self.__getattr__(f"{self.neuron_type}1").init_rsynaptic()
+            spk_list.append(spk)
+            syn_list.append(syn)
+            mem_list.append(mem)
+            for num in range(self.hidden_plus_out_layers_num):
+                spk, syn, mem = self.__getattr__(f"{self.neuron_type}{num + 1}").init_rsynaptic()
+                spk_list.append(spk)
+                syn_list.append(syn)
+                mem_list.append(mem)
         elif self.neuron_type == "SLSTM":
             pass
         elif self.neuron_type == "SConv2dLSTM":
             pass
 
-        return mem_list, spk_list
+        return mem_list, spk_list, syn_list
 
-    def _spiking_forward_pass(self, num, cur, mem_list, spk_list):
-        spk, mem = None, None
+    def _spiking_forward_pass(self, num, cur, mem_list, spk_list, syn_list=None):
+        spk, mem, syn = None, None, None
         if self.neuron_type == "lif":
             spk, mem = self.__getattr__(f"{self.neuron_type}{num + 1}")(cur, mem_list[num])
         elif self.neuron_type == "rlif":
@@ -223,16 +243,16 @@ class Net(nn.Module):
         elif self.neuron_type == "alp":
             pass
         elif self.neuron_type == "syn":
-            pass
+            spk, syn, mem = self.__getattr__(f"{self.neuron_type}{num + 1}")(cur, syn_list[num], mem_list[num])
         elif self.neuron_type == "rsyn":
-            pass
+            spk, syn, mem = self.__getattr__(f"{self.neuron_type}{num + 1}")(cur, spk_list[num], syn_list[num], mem_list[num])
         elif self.neuron_type == "syn":
             pass
         elif self.neuron_type == "SLSTM":
             pass
         elif self.neuron_type == "SConv2dLSTM":
             pass
-        return spk, mem
+        return spk, mem, syn
 
     def _calculate_total_consumption(self, spk_dict: dict, mem_dict: dict):
         total_consumption = 0
