@@ -1,3 +1,4 @@
+import json
 import os
 import time
 
@@ -8,7 +9,7 @@ from ax.service.ax_client import AxClient
 from ax.service.utils.instantiation import ObjectiveProperties
 from ax.utils.common.logger import get_logger
 from torch import nn, optim
-from utils import load_nmnist, load_shd, load_mnist, load_dvs
+from service.utils import load_nmnist, load_shd, load_mnist, load_dvs
 from models import model_generator
 
 logger: Logger = get_logger(__name__)
@@ -122,6 +123,18 @@ class AxManager:
             ax_client.save_to_json_file(f"{self.results_path}/{self.experiment_name}_after_trial_{i}.json")
 
         ax_client.save_to_json_file(f"{self.results_path}/{self.experiment_name}_completed.json")
+
+        results = ax_client.get_trials_data_frame()
+        data = results.to_dict()
+        print(data)
+        reformatted_dict = {}
+        for trial in range(self.num_trials):
+            reformatted_dict[trial] = {}
+            for key in data.keys():
+                reformatted_dict[trial][key] = data[key][trial]
+
+        with open(f"{self.results_path}/{self.experiment_name}_results.json", "w") as json_file:
+            json.dump(reformatted_dict, json_file)
 
         logger.info(ax_client.experiment.optimization_config)
 
