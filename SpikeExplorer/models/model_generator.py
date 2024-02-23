@@ -117,24 +117,11 @@ class Net(nn.Module):
                     spk = x[:,step,:]
                 spk = spk.float()
                 for num in range(self.hidden_plus_out_layers_num + 1):
-                    # if self.dataset == "shd":
-                    #     if num == 0:
-                    #         cur = self.__getattr__(f"fc{num + 1}")(spk[:, step, :])
-                    #     else:
-                    #         cur = self.__getattr__(f"fc{num + 1}")(spk)
-                    # elif self.dataset == "dvs":
-                    #     if num == 0:
-                    #         cur = self.__getattr__(f"fc{num + 1}")(spk[step, :, :])
-                    #     else:
-                    #         cur = self.__getattr__(f"fc{num + 1}")(spk)
-                    # else:
                     cur = self.__getattr__(f"fc{num + 1}")(spk)
-
                     if self.neuron_type in ["syn", "rsyn"]:
                         spk, mem, syn = self._spiking_forward_pass(num, cur, mem_list, spk_list, syn_list)
                     else:
                         spk, mem, _ = self._spiking_forward_pass(num, cur, mem_list, spk_list)
-                    # <---- ACT HERE FOR THE CONSUMPTION. USELESS TO RE-ITERATE
                     if not spk_dict.get(f"{self.neuron_type}{num + 1}"):
                         spk_dict[f"{self.neuron_type}{num + 1}"] = []
                     if not mem_dict.get(f"{self.neuron_type}{num + 1}"):
