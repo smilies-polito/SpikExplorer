@@ -260,4 +260,4 @@ class Net(nn.Module):
             layer_mem_tensor = torch.stack(mem_dict[layer], dim=0)     # same dimensions as above
             delta_mem = layer_mem_tensor[1:-1]-layer_mem_tensor[0:-2]
             total_consumption += torch.sum(torch.where((delta_mem > 0), 0.3, 0.1))
-        return total_consumption
+        return total_consumption.__float__()

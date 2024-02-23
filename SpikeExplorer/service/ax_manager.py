@@ -210,7 +210,6 @@ class AxManager:
         counter = 0
         eval_time = []
         cuda_eval_time = []
-        consumptions = []
 
         # Outer training loop
         for epoch in range(self.num_epochs):
@@ -276,7 +275,7 @@ class AxManager:
                     starter = time.time()
                 # Test set forward pass
                 if self.dataset == "shd":
-                    test_spk, test_mem, total_consumption = model(test_data[:, :, 0, :])
+                    test_spk, test_mem, test_total_consumption = model(test_data[:, :, 0, :])
                 elif self.dataset == "dvs":
                     test_spk, test_mem, total_consumption = model(
                         test_data[:, :, 0, :, :].reshape(
@@ -286,7 +285,7 @@ class AxManager:
                         )
                     )
                 else:
-                    test_spk, test_mem, total_consumption = model(test_data.view(self.batch_size, -1))
+                    test_spk, test_mem, test_total_consumption = model(test_data.view(self.batch_size, -1))
                 if torch.cuda.is_available():
                     ender.record()
                     # WAIT FOR GPU SYNC
@@ -323,6 +322,6 @@ class AxManager:
             elif objective == "time":
                 resulting_dict_for_ax[objective] = avg_time
             elif objective == "consumption":
-                resulting_dict_for_ax[objective] = torch.mean(torch.FloatTensor(consumptions))
+                resulting_dict_for_ax[objective] = test_total_consumption
 
         return resulting_dict_for_ax
