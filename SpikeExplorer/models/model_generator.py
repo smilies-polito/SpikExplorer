@@ -1,5 +1,6 @@
 import torch
 import snntorch as snn
+from snntorch import spikegen
 from torch import nn
 
 
@@ -33,15 +34,16 @@ class Net(nn.Module):
     """
 
     def __init__(self, input_size, hidden_layers: list, output_size, beta, time_steps, neuron_type=None,
-                 network_type=None, alpha=0.99, kernel_size=None, dataset="mnist", learnable_exp_decay=False):
+                 network_type=None, alpha=0.99, kernel_size=None, dataset="mnist", learnable_exp_decay=False,
+                 active_consumption=1, passive_consumtpion=0.2):
         super().__init__()
         self.alpha = alpha
         self.beta = beta
         self.time_steps = time_steps
         self.neuron_type = neuron_type
         self.network_type = network_type
-        self.active_consumption = 1
-        self.passive_consumption = 0.2
+        self.active_consumption = active_consumption
+        self.passive_consumption = passive_consumtpion
         self.input_size = input_size
         self.output_size = output_size
         self.hidden_plus_out_layers_num = len(hidden_layers)
@@ -102,27 +104,37 @@ class Net(nn.Module):
             spk_dict = {}
             mem_dict = {}
 
+            if self.dataset == "mnist":
+                input_spikes = spikegen.rate(x, num_steps=self.time_steps,
+                                         gain=1)
+
             for step in range(self.time_steps):
-                spk = x
+                if self.dataset == "mnist":
+                    spk = input_spikes[step]
+                elif self.dataset == "dvs":
+                    spk = x[step,:,:]
+                elif self.dataset == "shd":
+                    spk = x[:,step,:]
                 spk = spk.float()
                 for num in range(self.hidden_plus_out_layers_num + 1):
-                    if self.dataset == "shd":
-                        if num == 0:
-                            cur = self.__getattr__(f"fc{num + 1}")(spk[:, step, :])
-                        else:
-                            cur = self.__getattr__(f"fc{num + 1}")(spk)
-                    elif self.dataset == "dvs":
-                        if num == 0:
-                            cur = self.__getattr__(f"fc{num + 1}")(spk[step, :, :])
-                        else:
-                            cur = self.__getattr__(f"fc{num + 1}")(spk)
-                    else:
-                        cur = self.__getattr__(f"fc{num + 1}")(spk)
+                    # if self.dataset == "shd":
+                    #     if num == 0:
+                    #         cur = self.__getattr__(f"fc{num + 1}")(spk[:, step, :])
+                    #     else:
+                    #         cur = self.__getattr__(f"fc{num + 1}")(spk)
+                    # elif self.dataset == "dvs":
+                    #     if num == 0:
+                    #         cur = self.__getattr__(f"fc{num + 1}")(spk[step, :, :])
+                    #     else:
+                    #         cur = self.__getattr__(f"fc{num + 1}")(spk)
+                    # else:
+                    cur = self.__getattr__(f"fc{num + 1}")(spk)
 
                     if self.neuron_type in ["syn", "rsyn"]:
                         spk, mem, syn = self._spiking_forward_pass(num, cur, mem_list, spk_list, syn_list)
                     else:
                         spk, mem, _ = self._spiking_forward_pass(num, cur, mem_list, spk_list)
+                    # <---- ACT HERE FOR THE CONSUMPTION. USELESS TO RE-ITERATE
                     if not spk_dict.get(f"{self.neuron_type}{num + 1}"):
                         spk_dict[f"{self.neuron_type}{num + 1}"] = []
                     if not mem_dict.get(f"{self.neuron_type}{num + 1}"):
@@ -134,7 +146,7 @@ class Net(nn.Module):
 
             total_consumption = self._calculate_total_consumption(spk_dict, mem_dict)
 
-            return torch.stack(spk_rec, dim=0), torch.stack(mem_rec, dim=0)
+            return torch.stack(spk_rec, dim=0), torch.stack(mem_rec, dim=0), total_consumption
 
     def _define_spiking_layer(self, beta, hidden_layers, counter, is_first, alpha=0.9, kernel_size=3):
         if is_first:

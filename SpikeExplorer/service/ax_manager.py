@@ -222,12 +222,12 @@ class AxManager:
 
                 model.train()
                 if self.dataset == "shd":
-                    spk_rec, mem_rec = model(data[:, :, 0, :])
+                    spk_rec, mem_rec, total_consumption = model(data[:, :, 0, :])
                     m, _ = torch.max(mem_rec, 0)
                     log_p_y = log_softmax_fn(m)
                     loss_val = loss(log_p_y, targets)
                 elif self.dataset == "dvs":
-                    spk_rec, mem_rec = model(
+                    spk_rec, mem_rec, total_consumption = model(
                         data[:, :, 0, :, :].reshape(
                             parameterization.get("time_steps", self.num_steps),
                             self.batch_size,
@@ -238,7 +238,7 @@ class AxManager:
                     log_p_y = log_softmax_fn(m)
                     loss_val = loss(log_p_y, targets)
                 else:
-                    spk_rec, mem_rec = model(data.view(self.batch_size, -1))
+                    spk_rec, mem_rec, total_consumption = model(data.view(self.batch_size, -1))
 
                     # initialize the loss & sum over time
                     loss_val = torch.zeros((1), dtype=self.dtype, device=self.device)
@@ -276,9 +276,9 @@ class AxManager:
                     starter = time.time()
                 # Test set forward pass
                 if self.dataset == "shd":
-                    test_spk, test_mem = model(test_data[:, :, 0, :])
+                    test_spk, test_mem, total_consumption = model(test_data[:, :, 0, :])
                 elif self.dataset == "dvs":
-                    test_spk, test_mem = model(
+                    test_spk, test_mem, total_consumption = model(
                         test_data[:, :, 0, :, :].reshape(
                             parameterization.get("time_steps", self.num_steps),
                             self.batch_size,
@@ -286,7 +286,7 @@ class AxManager:
                         )
                     )
                 else:
-                    test_spk, test_mem = model(test_data.view(self.batch_size, -1))
+                    test_spk, test_mem, total_consumption = model(test_data.view(self.batch_size, -1))
                 if torch.cuda.is_available():
                     ender.record()
                     # WAIT FOR GPU SYNC
