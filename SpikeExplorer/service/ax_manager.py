@@ -277,7 +277,7 @@ class AxManager:
                 if self.dataset == "shd":
                     test_spk, test_mem, test_total_consumption = model(test_data[:, :, 0, :])
                 elif self.dataset == "dvs":
-                    test_spk, test_mem, total_consumption = model(
+                    test_spk, test_mem, test_total_consumption = model(
                         test_data[:, :, 0, :, :].reshape(
                             parameterization.get("time_steps", self.num_steps),
                             self.batch_size,
