@@ -139,12 +139,26 @@ class AxManager:
         logger.info(ax_client.experiment.optimization_config)
 
     def train_evaluate(self, parameterization):
+        tau_mem = 10e-3
+        tau_syn = 5e-3
+
+        alpha = float(np.exp(-self.num_steps / tau_syn))
+        beta = float(np.exp(-self.num_steps / tau_mem))
+
+        hidden_layer_nums_param = parameterization.get("hidden_layer_num", None)
+        hidden_layers_list = []
+
+        if hidden_layer_nums_param:
+            for i in range(hidden_layer_nums_param):
+                hidden_layers_list.append(parameterization.get(f"hidden_layer_size_{i+1}"))
+            self.hidden_layers = hidden_layers_list
+
         if self.dataset == "nmnist":
             model = None
         elif self.dataset == "shd":
             if parameterization.get("time_steps"):
                 self.train_loader, self.test_loader, self.input_size = load_shd(
-                    self.batch_size, parameterization.get("time_steps")
+                    self.batch_size, parameterization.get("time_steps", self.num_steps)
                 )
             model = model_generator.Net(
                 input_size=self.input_size,
@@ -159,7 +173,8 @@ class AxManager:
                 #        "value_type": "bool",
                 #        "values": [true, false]
                 #    }
-                beta=parameterization.get("exp_decay", 0.95),
+                alpha=parameterization.get("alpha", None) if parameterization.get("alpha", None) else alpha,
+                beta=parameterization.get("beta", None) if parameterization.get("beta", None) else beta,
                 learnable_exp_decay=parameterization.get("learnable_exp_decay", False),
                 time_steps=parameterization.get("time_steps", self.num_steps),
                 dataset=self.dataset,
@@ -170,13 +185,14 @@ class AxManager:
         elif self.dataset == "dvs":
             if parameterization.get("time_steps"):
                 self.train_loader, self.test_loader, self.input_size = load_dvs(
-                    self.batch_size, parameterization.get("time_steps")
+                    self.batch_size, parameterization.get("time_steps", self.num_steps)
                 )
             model = model_generator.Net(
                 input_size=self.input_size,
                 hidden_layers=self.hidden_layers,
                 output_size=self.output_size,
-                beta=parameterization.get("exp_decay", 0.95),
+                alpha=parameterization.get("alpha", None) if parameterization.get("alpha", None) else alpha,
+                beta=parameterization.get("beta", None) if parameterization.get("beta", None) else beta,
                 learnable_exp_decay=parameterization.get("learnable_exp_decay", False),
                 time_steps=parameterization.get("time_steps", self.num_steps),
                 dataset=self.dataset,
@@ -189,7 +205,8 @@ class AxManager:
                 input_size=self.input_size,
                 hidden_layers=self.hidden_layers,
                 output_size=self.output_size,
-                beta=parameterization.get("exp_decay", 0.95),
+                alpha=parameterization.get("alpha", None) if parameterization.get("alpha", None) else alpha,
+                beta=parameterization.get("beta", None) if parameterization.get("beta", None) else beta,
                 learnable_exp_decay=parameterization.get("learnable_exp_decay", False),
                 time_steps=parameterization.get("time_steps", self.num_steps),
                 neuron_type=parameterization.get("neuron_type", "lif"),
