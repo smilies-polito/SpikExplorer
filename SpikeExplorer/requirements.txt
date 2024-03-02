@@ -1,8 +1,10 @@
-snntorch
+snntorch~=0.7.0
 ax-platform
-torchvision
+torchvision~=0.15.2
 torchsummary
-tonic
-torch
-numpy
+tonic~=1.4.1
+torch~=2.0.1
+numpy~=1.24.4
 pytest
+plotly~=5.16.1
+Jinja2~=3.1.3

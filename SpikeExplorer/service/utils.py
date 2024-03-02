@@ -59,7 +59,7 @@ def load_dvs(batch_size, n_time_bins=25):
     test_loader = torch.utils.data.DataLoader(cached_testset, batch_size=batch_size, shuffle=True, drop_last=True,
                                               collate_fn=tonic.collation.PadTensors(batch_first=False))
 
-    return train_loader, test_loader, size
+    return train_loader, test_loader, 128*128*3
 
 
 def load_shd(batch_size, nums_bins=25):
@@ -88,24 +88,25 @@ def load_shd(batch_size, nums_bins=25):
     return train_loader, test_loader, num_inputs
 
 
-def load_nmnist(batch_size):
+def load_nmnist(batch_size, nums_bins):
     sensor_size = tonic.datasets.NMNIST.sensor_size
 
-    frame_transform = transforms.Compose(
+    transform = tonic_transforms.Compose(
         [
-            tonic.transforms.Denoise(filter_time=10000),
-            tonic.transforms.ToFrame(sensor_size=sensor_size, time_window=1000),
+            tonic_transforms.Denoise(filter_time=10000),
+            tonic_transforms.ToFrame(
+                sensor_size=sensor_size,
+                n_time_bins=nums_bins,
+            )
         ]
     )
 
     trainset = tonic.datasets.NMNIST(
-        save_to="./data", transform=frame_transform, train=True
+        save_to="./data", transform=transform, train=True
     )
     testset = tonic.datasets.NMNIST(
-        save_to="./data", transform=frame_transform, train=False
+        save_to="./data", transform=transform, train=False
     )
-
-    print(trainset)
 
     transform = tonic.transforms.Compose(
         [torch.from_numpy, transforms.RandomRotation([-10, 10])]
@@ -117,7 +118,7 @@ def load_nmnist(batch_size):
 
     # no augmentations for the testset
     cached_testset = DiskCachedDataset(testset, cache_path="./cache/nmnist/test")
-    print(cached_testset)
+
     train_loader = DataLoader(
         dataset=cached_trainset,
         batch_size=batch_size,
@@ -131,4 +132,3 @@ def load_nmnist(batch_size):
     )
 
     return train_loader, test_loader
-
