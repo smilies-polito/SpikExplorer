@@ -63,8 +63,8 @@ class AxManager:
             self.output_size = 10
             self.train_loader, self.test_loader = load_mnist(self.batch_size)
 
-        self.idle_consumption = config.get("neuron_consumption").get("idle")  # TODO: TO BE DEFINED FINAL METHOD
-        self.active_consumption = config.get("neuron_consumption").get("active")  # TODO: TO BE DEFINED FINAL METHOD
+        self.passive_consumption = config.get("neuron_consumption", {}).get("passive", 0.2)
+        self.active_consumption = config.get("neuron_consumption", {}).get("active", 1)
 
     def load_parameters_to_search(self, parameters_to_search=None):
         if parameters_to_search:
@@ -141,32 +141,31 @@ class AxManager:
         # with open(f"{self.results_path}/{self.experiment_name}_pareto_accuracy_time.html", "w") as pareto_html:
         #     pareto_html.write(accuracy_time_plot_html)
 
-        ax_client.save_to_json_file(f"{self.results_path}/{self.experiment_name}_completed.json")
+        # ax_client.save_to_json_file(f"{self.results_path}/{self.experiment_name}_completed.json")
 
         results = ax_client.get_trials_data_frame()
-        metrics_dict = {}
-        if "accuracy" in ax_client.objective_names:
-            metrics_dict.update({"accuracy": results.get("accuracy").values})
-        if "area" in ax_client.objective_names:
-            metrics_dict.update({"area": results.get("area").values})
-        if "time" in ax_client.objective_names:
-            metrics_dict.update({"time": results.get("time").values})
-        if "consumption" in ax_client.objective_names:
-            metrics_dict.update({"consumption": results.get("consumption").values})
-        if "accuracy" in ax_client.objective_names and "time" in ax_client.objective_names:
-            self.plot_pareto_given_x_and_y(metrics_dict, "accuracy", "time", max_x=True, max_y=False)
-        if "accuracy" in ax_client.objective_names and "area" in ax_client.objective_names:
-            self.plot_pareto_given_x_and_y(metrics_dict, "accuracy", "area", max_x=True, max_y=False)
-        if "accuracy" in ax_client.objective_names and "consumption" in ax_client.objective_names:
-            self.plot_pareto_given_x_and_y(metrics_dict, "accuracy", "consumption", max_x=True, max_y=False)
-        if "area" in ax_client.objective_names and "time" in ax_client.objective_names:
-            self.plot_pareto_given_x_and_y(metrics_dict, "area", "time", max_x=False, max_y=False)
-        if "area" in ax_client.objective_names and "consumption" in ax_client.objective_names:
-            self.plot_pareto_given_x_and_y(metrics_dict, "area", "consumption", max_x=False, max_y=False)
-        if "consumption" in ax_client.objective_names and "time" in ax_client.objective_names:
-            self.plot_pareto_given_x_and_y(metrics_dict, "consumption", "time", max_x=False, max_y=False)
+        # metrics_dict = {}
+        # if "accuracy" in ax_client.objective_names:
+        #     metrics_dict.update({"accuracy": results.get("accuracy").values})
+        # if "area" in ax_client.objective_names:
+        #     metrics_dict.update({"area": results.get("area").values})
+        # if "time" in ax_client.objective_names:
+        #     metrics_dict.update({"time": results.get("time").values})
+        # if "consumption" in ax_client.objective_names:
+        #     metrics_dict.update({"consumption": results.get("consumption").values})
+        # if "accuracy" in ax_client.objective_names and "time" in ax_client.objective_names:
+        #     self.plot_pareto_given_x_and_y(metrics_dict, "accuracy", "time", max_x=True, max_y=False)
+        # if "accuracy" in ax_client.objective_names and "area" in ax_client.objective_names:
+        #     self.plot_pareto_given_x_and_y(metrics_dict, "accuracy", "area", max_x=True, max_y=False)
+        # if "accuracy" in ax_client.objective_names and "consumption" in ax_client.objective_names:
+        #     self.plot_pareto_given_x_and_y(metrics_dict, "accuracy", "consumption", max_x=True, max_y=False)
+        # if "area" in ax_client.objective_names and "time" in ax_client.objective_names:
+        #     self.plot_pareto_given_x_and_y(metrics_dict, "area", "time", max_x=False, max_y=False)
+        # if "area" in ax_client.objective_names and "consumption" in ax_client.objective_names:
+        #     self.plot_pareto_given_x_and_y(metrics_dict, "area", "consumption", max_x=False, max_y=False)
+        # if "consumption" in ax_client.objective_names and "time" in ax_client.objective_names:
+        #     self.plot_pareto_given_x_and_y(metrics_dict, "consumption", "time", max_x=False, max_y=False)
         data = results.to_dict()
-        print(data)
         reformatted_dict = {}
         for trial in range(self.num_trials):
             reformatted_dict[trial] = {}
@@ -205,18 +204,36 @@ class AxManager:
         return pareto_front_x, pareto_front_y
 
     def train_evaluate(self, parameterization):
+        loss = nn.CrossEntropyLoss()
+
         tau_mem = 10e-3
         tau_syn = 5e-3
 
         alpha = float(np.exp(-self.num_steps / tau_syn))
         beta = float(np.exp(-self.num_steps / tau_mem))
 
+        if parameterization.get("alpha_power", None):
+            alpha = float(1-((2**parameterization.get("alpha_power"))/100))
+        if parameterization.get("beta_power", None):
+            beta = float(1-((2**parameterization.get("beta_power"))/100))
+
         hidden_layer_nums_param = parameterization.get("hidden_layer_num", None)
         hidden_layers_list = []
 
         if hidden_layer_nums_param:
             for i in range(hidden_layer_nums_param):
-                hidden_layers_list.append(parameterization.get(f"hidden_layer_size_{i+1}"))
+                if parameterization.get(f"hidden_layer_size_{i+1}", None):
+                    hidden_layers_list.append(parameterization.get(f"hidden_layer_size_{i+1}", None))
+            if len(hidden_layers_list) == 0:
+                if hidden_layer_nums_param == 1:
+                    hidden_layers_list.append(200)
+                if hidden_layer_nums_param == 2:
+                    hidden_layers_list.append(100)
+                    hidden_layers_list.append(100)
+                if hidden_layer_nums_param == 3:
+                    hidden_layers_list.append(100)
+                    hidden_layers_list.append(50)
+                    hidden_layers_list.append(50)
             self.hidden_layers = hidden_layers_list
 
         if self.dataset == "nmnist":
@@ -245,9 +262,10 @@ class AxManager:
                 time_steps=parameterization.get("time_steps", self.num_steps),
                 dataset=self.dataset,
                 neuron_type=parameterization.get("neuron_type", "lif"),
+                active_consumption=self.active_consumption,
+                passive_consumtpion=self.passive_consumption,
+                surrogate_grad=parameterization.get("surrogate_grad", None)
             )
-            loss = nn.CrossEntropyLoss()
-            log_softmax_fn = nn.LogSoftmax(dim=1)
         elif self.dataset == "dvs":
             if parameterization.get("time_steps"):
                 self.train_loader, self.test_loader, self.input_size = load_dvs(
@@ -263,9 +281,10 @@ class AxManager:
                 time_steps=parameterization.get("time_steps", self.num_steps),
                 dataset=self.dataset,
                 neuron_type=parameterization.get("neuron_type", "lif"),
+                active_consumption=self.active_consumption,
+                passive_consumtpion=self.passive_consumption,
+                surrogate_grad=parameterization.get("surrogate_grad", None)
             )
-            loss = nn.CrossEntropyLoss()
-            log_softmax_fn = nn.LogSoftmax(dim=1)
         else:
             model = model_generator.Net(
                 input_size=self.input_size,
@@ -276,12 +295,15 @@ class AxManager:
                 learnable_exp_decay=parameterization.get("learnable_exp_decay", False),
                 time_steps=parameterization.get("time_steps", self.num_steps),
                 neuron_type=parameterization.get("neuron_type", "lif"),
+                active_consumption=self.active_consumption,
+                passive_consumtpion=self.passive_consumption,
+                surrogate_grad=parameterization.get("surrogate_grad", None)
             )
-            loss = nn.CrossEntropyLoss()
+
 
         print(model)
         num_neurons = 0
-        num_weights = self.input_size * hidden_layers_list[0]
+        num_weights = self.input_size * self.hidden_layers[0]
         for i in range(len(hidden_layers_list)):
             if i != (len(hidden_layers_list)-1):
                 num_neurons += hidden_layers_list[i]
@@ -290,7 +312,7 @@ class AxManager:
                 num_neurons += hidden_layers_list[i] + self.output_size
                 num_weights += hidden_layers_list[i] * self.output_size
 
-        total_area = self.weight_memory_occupation * num_weights + self.neuron_memory_occupation_by_type(parameterization.get("neuron_type", "lif"))
+        total_area = self.weight_memory_occupation * num_weights + self.neuron_memory_occupation_by_type(parameterization.get("neuron_type", "lif")) * num_neurons
 
         optimizer = optim.Adam(
             model.parameters(),
@@ -417,7 +439,10 @@ class AxManager:
                 resulting_dict_for_ax[objective] = test_total_consumption
             elif objective == "area":
                 resulting_dict_for_ax[objective] = total_area
-
+        self.train_loader = None
+        del self.train_loader
+        self.test_loader = None
+        del self.test_loader
         return resulting_dict_for_ax
 
     def neuron_memory_occupation_by_type(self, neuron_type):

@@ -1,58 +1,71 @@
 {
-    "hidden_layers": [100],
+    "hidden_layers": [128],
     "dataset":"mnist",
-    "name": "fully_params_on_mnist",
+    "name": "mnist_fixed_layers_variable_decay",
     "overwrite_existing_experiment": true,
     "is_test": false,
-    "num_trials": 20,
+    "num_trials": 10,
     "batch_size": 256,
-    "num_epochs": 10,
+    "num_epochs": 50,
     "num_steps": 25,
+    "weight_memory_occupation": 6,
+    "neurons_occupation": {
+        "lif": 2,
+        "rlif": 3,
+        "syn": 4,
+        "rsyn": 6
+    },
     "objectives": [
         {
             "obj_name": "accuracy",
             "minimize": false,
             "threshold": 0.98
-        },
-        {
-            "obj_name": "time",
-            "minimize": true,
-            "threshold": 0.09
         }
     ],
     "parameters_to_search": [
         {
             "name": "lr",
             "type": "range",
-            "bounds": [1e-4, 1e-2],
+            "bounds": [1e-4, 1.2e-4],
             "log_scale": true,
             "value_type": "float"
         },
         {
             "name": "beta1",
             "type": "range",
-            "bounds": [0.95, 0.999],
+            "bounds": [0.9, 0.999],
             "log_scale": false,
             "value_type": "float"
+        },
+        {
+            "name": "alpha_power",
+            "type": "choice",
+            "values": [1, 2, 3, 4],
+            "log_scale": false,
+            "value_type": "int",
+            "is_ordered": true
+        },
+        {
+            "name": "beta_power",
+            "type": "choice",
+            "values": [1, 2, 3, 4],
+            "log_scale": false,
+            "value_type": "int",
+            "is_ordered": true
         },
         {
             "name": "neuron_type",
             "type": "choice",
             "value_type": "str",
-            "values": ["lif","rlif","syn","rsyn"]
+            "values": ["lif","rlif","syn","rsyn"],
+            "is_ordered": false
         },
         {
             "name": "num_steps",
             "type": "choice",
             "value_type": "int",
-            "values": [25,50,100]
-        },
-        {
-            "name": "exp_decay",
-            "type": "range",
-            "bounds": [0.6, 0.95],
-            "log_scale": false,
-            "value_type": "float"
+            "values": [16,32,64],
+            "is_ordered": true
         }
     ],
     "neuron_consumption": {

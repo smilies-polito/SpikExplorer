@@ -1,6 +1,7 @@
 import torch
 import snntorch as snn
 from snntorch import spikegen
+from snntorch import surrogate
 from torch import nn
 
 
@@ -35,7 +36,7 @@ class Net(nn.Module):
 
     def __init__(self, input_size, hidden_layers: list, output_size, beta, time_steps, neuron_type=None,
                  network_type=None, alpha=0.99, kernel_size=None, dataset="mnist", learnable_exp_decay=False,
-                 active_consumption=1, passive_consumtpion=0.2):
+                 active_consumption=1, passive_consumtpion=0.2, surrogate_grad=None):
         super().__init__()
         self.alpha = alpha
         self.beta = beta
@@ -52,6 +53,7 @@ class Net(nn.Module):
         self.device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
         self.dataset = dataset
         self.learnable_exp_decay = learnable_exp_decay
+        self.surrogate_grad = surrogate_grad if surrogate_grad else surrogate.atan()
 
         if network_type == "conv":
             pass
@@ -157,6 +159,8 @@ class Net(nn.Module):
                 self.__setattr__(f"{self.neuron_type}1", snn.SConv2dLSTM(in_channels=hidden_layers[0],
                                                                          out_channels=hidden_layers[0],
                                                                          kernel_size=kernel_size))
+            elif not isinstance(self.neuron_type, str):
+                self.__setattr__(f"{self.neuron_type.name}1", self.neuron_type.Neuron(alpha=alpha, beta=beta))
         else:
             if self.neuron_type == "lif":
                 self.__setattr__(f"{self.neuron_type}{counter + 2}", snn.Leaky(beta=beta))
@@ -180,6 +184,8 @@ class Net(nn.Module):
                                  snn.SConv2dLSTM(in_channels=hidden_layers[counter + 1],
                                                  out_channels=hidden_layers[counter + 1],
                                                  kernel_size=kernel_size))
+            elif not isinstance(self.neuron_type, str):
+                self.__setattr__(f"{self.neuron_type.name}{counter + 2}", self.neuron_type.Neuron(alpha=alpha, beta=beta))
 
     def _init_spiking_layers(self):
         mem_list = []
@@ -228,6 +234,8 @@ class Net(nn.Module):
             pass
         elif self.neuron_type == "SConv2dLSTM":
             pass
+        elif not isinstance(self.neuron_type, str):
+            pass
 
         return mem_list, spk_list, syn_list
 
@@ -251,6 +259,9 @@ class Net(nn.Module):
             pass
         elif self.neuron_type == "SConv2dLSTM":
             pass
+        elif not isinstance(self.neuron_type, str):
+            pass
+
         return spk, mem, syn
 
     def _calculate_total_consumption(self, spk_dict: dict, mem_dict: dict):
