@@ -1,0 +1,75 @@
+{
+    "hidden_layers": [128],
+    "dataset":"mnist",
+    "name": "mnist_fixed_layers_variable_decay",
+    "overwrite_existing_experiment": true,
+    "is_test": false,
+    "num_trials": 10,
+    "batch_size": 256,
+    "num_epochs": 50,
+    "num_steps": 25,
+    "weight_memory_occupation": 6,
+    "neurons_occupation": {
+        "lif": 2,
+        "rlif": 3,
+        "syn": 4,
+        "rsyn": 6
+    },
+    "objectives": [
+        {
+            "obj_name": "accuracy",
+            "minimize": false,
+            "threshold": 0.98
+        }
+    ],
+    "parameters_to_search": [
+        {
+            "name": "lr",
+            "type": "range",
+            "bounds": [1e-4, 1.2e-4],
+            "log_scale": true,
+            "value_type": "float"
+        },
+        {
+            "name": "beta1",
+            "type": "range",
+            "bounds": [0.9, 0.999],
+            "log_scale": false,
+            "value_type": "float"
+        },
+        {
+            "name": "alpha_power",
+            "type": "choice",
+            "values": [1, 2, 3, 4],
+            "log_scale": false,
+            "value_type": "int",
+            "is_ordered": true
+        },
+        {
+            "name": "beta_power",
+            "type": "choice",
+            "values": [1, 2, 3, 4],
+            "log_scale": false,
+            "value_type": "int",
+            "is_ordered": true
+        },
+        {
+            "name": "neuron_type",
+            "type": "choice",
+            "value_type": "str",
+            "values": ["lif","rlif","syn","rsyn"],
+            "is_ordered": false
+        },
+        {
+            "name": "num_steps",
+            "type": "choice",
+            "value_type": "int",
+            "values": [16,32,64],
+            "is_ordered": true
+        }
+    ],
+    "neuron_consumption": {
+        "active": 0.1,
+        "idle": 0.001
+    }
+}
